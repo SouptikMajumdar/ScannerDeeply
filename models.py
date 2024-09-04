@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
+import numpy as np
 
 class ResNetModel(nn.Module):
 
@@ -103,12 +104,10 @@ class Block(nn.Module):
     '''
     
     def __init__(self, in_channel, out_channel, kernel_size):
-        ''' Initialisation '''
-
         super().__init__()
-        self.conv_1 = nn.Conv2d(in_channel, out_channel, kernel_size)
-        self.conv_2 = nn.Conv2d(out_channel, out_channel, kernel_size)
-        self.relu   = nn.ReLU()
+        self.conv_1 = nn.Conv2d(in_channel, out_channel, kernel_size, padding=kernel_size//2)
+        self.conv_2 = nn.Conv2d(out_channel, out_channel, kernel_size, padding=kernel_size//2)
+        self.relu = nn.ReLU()
         
         # Initialise weights on convolutional layers        
         nn.init.normal_(self.conv_1.weight, mean = 0.0, std = self.init_std(in_channel, kernel_size))
@@ -148,17 +147,24 @@ class UNetResNet50(nn.Module):
         self.encoder_layer3 = resnet.layer3
         self.encoder_layer4 = resnet.layer4
         
-        self.upconv4 = nn.ConvTranspose2d(2048, 1024, kernel_size=2, stride=2)
-        self.upconv3 = nn.ConvTranspose2d(1024, 512, kernel_size=2, stride=2)
-        self.upconv2 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
-        self.upconv1 = nn.ConvTranspose2d(256, 64, kernel_size=2, stride=2)
+        # Decoder
+        self.upconv4 = nn.ConvTranspose2d(2048, 1024, 2, stride=2)
+        self.decoder_block4 = Block(2048, 1024, 3)  # Including skip connection
 
-        self.decoder_block4 = Block(2048, 1024, 1024)
-        self.decoder_block3 = Block(1024, 512, 512)
-        self.decoder_block2 = Block(512, 256, 256)
-        self.decoder_block1 = Block(256, 64, 64)
+        self.upconv3 = nn.ConvTranspose2d(1024, 512, 2, stride=2)
+        self.decoder_block3 = Block(1024, 512, 3)
 
-        self.final_conv = nn.Conv2d(64, num_classes, kernel_size=1)
+        self.upconv2 = nn.ConvTranspose2d(512, 256, 2, stride=2)
+        self.decoder_block2 = Block(512, 256, 3)
+
+        self.upconv1 = nn.ConvTranspose2d(256, 64, 2, stride=2)
+        self.decoder_block1 = Block(128, 64, 3)  # 128 from upconv + 64 from skip
+
+        # Adjust final upsample to reach the desired size
+        self.final_upsample = nn.Upsample(size=(256, 256), mode='bilinear', align_corners=False)
+        self.final_conv = nn.Conv2d(64, num_classes, 1)
+
+        # self.final_conv = nn.Conv2d(64, num_classes, kernel_size=1)
     
     def forward(self, x):
         x1 = self.encoder_conv1(x)       
@@ -182,8 +188,10 @@ class UNetResNet50(nn.Module):
         d2 = self.decoder_block2(d2)
 
         d1 = self.upconv1(d2)
+        d1 = torch.nn.functional.interpolate(d1, size=(x1.size(2), x1.size(3)), mode='bilinear', align_corners=False)
         d1 = torch.cat([d1, x1], dim=1)
         d1 = self.decoder_block1(d1)
 
+        d1 = self.final_upsample(d1)
         out = self.final_conv(d1)
         return out
