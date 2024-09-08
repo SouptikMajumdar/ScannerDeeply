@@ -10,7 +10,7 @@ class ResNetModel(nn.Module):
         super(ResNetModel, self).__init__()
 
         self.num_channels = num_channels
-        self.resnet = models.resnet50(pretrained=load_weight)
+        self.resnet = models.resnet50(weights=ResNet50_Weights.DEFAULT if load_weight else False)
         self.activation = nn.GELU if activation=='GeLU' else nn.ReLU
 
         for param in self.resnet.parameters():

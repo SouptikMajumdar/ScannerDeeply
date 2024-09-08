@@ -37,6 +37,14 @@ def evaluate_model(model, val_loader, criterion):
             images = images.cuda()
             gaze_maps = gaze_maps.cuda()
             outputs = model(images).reshape(B, 1, H, W)
+
+            #Fix of KL Divergence:
+            outputs = outputs.reshape(outputs.shape[0],-1)
+            gaze_maps = gaze_maps.reshape(gaze_maps.shape[0],-1)
+
+            outputs = F.log_softmax(outputs, dim=1)
+            gaze_maps = F.softmax(gaze_maps, dim=1)
+
             loss = criterion(outputs, gaze_maps)
             total_loss += loss.item()
     
@@ -61,10 +69,11 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
             #Fix of KL Divergence:
             outputs = outputs.reshape(outputs.shape[0],-1)
             gaze_maps = gaze_maps.reshape(gaze_maps.shape[0],-1)
-            
             outputs = F.log_softmax(outputs, dim=1)
-            gaze_maps = F.normalize(gaze_maps, p=1, dim=1)
+            gaze_maps = F.softmax(gaze_maps, dim=1)
+
             
+            #loss = criterion(torch.log(outputs_dist), (gaze_maps_dist))
             loss = criterion(outputs, gaze_maps)
             loss.backward()
             optimizer.step()
@@ -80,10 +89,10 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
         print(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {avg_train_loss:.4f}, Val Loss: {val_loss:.4f}")
         
         # Save the best model
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_model_weights = model.state_dict()
-            torch.save(model.state_dict(), 'models/UNetRes50.pth')
+        #if val_loss < best_val_loss:
+        best_val_loss = val_loss
+        best_model_weights = model.state_dict()
+        torch.save(model.state_dict(), 'models/UNetRes50.pth')
 
     # Load the best model weights
     if best_model_weights:
@@ -105,8 +114,8 @@ def main():
     learning_rate = 1e-4
     weight_decay = 1e-4
 
-    model = UNetResNet50(train_enc=False).cuda()
-    criterion = nn.KLDivLoss(reduction='batchmean')
+    model = UNetResNet50(train_enc=True).cuda()
+    criterion = nn.KLDivLoss(reduction='batchmean', log_target=False)
     #criterion = nn.L1Loss()
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     

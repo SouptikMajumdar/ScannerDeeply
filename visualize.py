@@ -85,4 +85,4 @@ model = UNetResNet50().cuda()
 model.load_state_dict(state_dict)
 
 
-visualize_random_result(model, val_loader)
+visualize_random_result(model, train_loader)
