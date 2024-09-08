@@ -173,7 +173,6 @@ class UNetResNet50(nn.Module):
         x4 = self.encoder_layer3(x3)     
         x5 = self.encoder_layer4(x4)     
 
-        import IPython; IPython.embed()
 
         d4 = self.upconv4(x5)            
         d4 = torch.cat([d4, x4], dim=1) 
