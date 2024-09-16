@@ -1,4 +1,7 @@
+import os
+import argparse
 import torch
+torch.manual_seed(42)
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -10,9 +13,9 @@ from models import ResNetModel, UNetResNet50
 from GazeMapDataset import GazeMapDataset
 import utils
 import matplotlib.pyplot as plt
-import random
 from losses import kl_loss
 
+from tqdm import trange
 
 
 # Define transformations
@@ -57,7 +60,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
     for epoch in range(num_epochs):
         model.train()
         running_loss = 0.0
-        
+
         step=0
         for images, gaze_maps in train_loader:
             B, C, H, W = images.shape
@@ -99,16 +102,15 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
         model.load_state_dict(best_model_weights)
         torch.save(model.state_dict(), 'models/UNetRes50.pth')
 
-def main():
+def main(data_path: str):
     # Directories for train and validation
-    train_images_dir = 'data/datasets_0221/correct/images/train'
-    train_maps_dir = 'data/datasets_0221/correct/maps/train'
-    val_images_dir = 'data/datasets_0221/correct/images/val'
-    val_maps_dir = 'data/datasets_0221/correct/maps/val'
+    train_images_dir = os.path.join(data_path,'correct/images/train')
+    train_maps_dir = os.path.join(data_path, 'correct/maps/train')
+    val_images_dir = os.path.join(data_path, 'correct/images/val')
+    val_maps_dir = os.path.join(data_path,'correct/maps/val')
     # Create datasets
     train_dataset = GazeMapDataset(train_images_dir, train_maps_dir, image_transform=image_transform, map_transform=map_transform, split='train')
     val_dataset = GazeMapDataset(val_images_dir, val_maps_dir, image_transform=image_transform, map_transform=map_transform, split='val')
-    
 
     batch_size = 16
     learning_rate = 1e-4
@@ -118,7 +120,6 @@ def main():
     criterion = nn.KLDivLoss(reduction='batchmean', log_target=False)
     #criterion = nn.L1Loss()
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    
 
     # Create data loaders
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -127,5 +128,9 @@ def main():
     train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=40)
 
 
+
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_path", type=str, default="data/datasets_0221")
+    args = vars(parser.parse_args())
+    main(args['data_path'])
